@@ -45,7 +45,7 @@ db.create_all()
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(user_id)
+    return User.query.get(int(user_id))
 
 
 @app.route('/')
@@ -58,6 +58,12 @@ def get_all_posts():
 def register():
     form = RegisterForm()
     if form.validate_on_submit():
+
+        existing_user = User.query.filter_by(email=form.email.data).first()
+        if existing_user:
+            flash('You are already registered. Please login instead.')
+            return redirect(url_for('login'))
+        
         hash = generate_password_hash(form.password.data, method='pbkdf2:sha256', salt_length=8)
         new_user = User(
             name = form.name.data,
@@ -66,6 +72,8 @@ def register():
         )
         db.session.add(new_user)
         db.session.commit()
+
+        login_user(new_user)
 
         return redirect(url_for('get_all_posts'))
 
@@ -77,16 +85,25 @@ def login():
     form = LogInForm()
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
-        if user is not None and check_password_hash(user.password, form.password.data):
+
+        if not user:
+            flash('User does not exist.')
+            return redirect('login')
+
+        elif check_password_hash(user.password, form.password.data):
             login_user(user)
 
             return redirect(url_for('get_all_posts'))
+        else:
+            flash('Wrong password.')
+            return redirect('login')
 
     return render_template("login.html", form=form)
 
 
 @app.route('/logout')
 def logout():
+    logout_user()
     return redirect(url_for('get_all_posts'))
 
 
